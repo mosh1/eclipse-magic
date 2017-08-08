@@ -188,12 +188,12 @@ PartialBktCount = 1				-- How many brackets on each side of the neutral exposure
 -- the contact time.  Note that, between the setting of the camera clock and the jitter in this
 -- script, there will be some error in the timing.  +/- half a second or more is possible.
 --
-C23BurstCount = 18			-- Note that most Canon DSLRs can't take more than 13-14 RAW images
-								-- in a burst before the buffer is full, and they slow to ~1 image/second.
-C2BurstStartOffset = 7
+C23BurstCount = 20			-- Note that most Canon DSLRs can't take more than 13-14 RAW images
+							-- in a burst before the buffer is full, and they slow to ~1 image/second.
+C2BurstStartOffset = 3
 C3BurstStartOffset = 2
 C23BurstISO = 100
-C23BurstShutterSpeed = (1/6400)
+C23BurstShutterSpeed = (1/3200)
 
 
 --
@@ -204,9 +204,9 @@ C23BurstShutterSpeed = (1/6400)
 -- will also be exposures at MinShutterSpeed from MinISO to PrefISO, and MaxShutterSpeed from
 -- PrefISO to MaxISO.
 --
-TotalityMinISO = 100 
-TotalityMaxISO = 1600
-TotalityPrefISO = 400
+TotalityMinISO = 200 
+TotalityMaxISO = 200
+TotalityPrefISO = 200
 TotalityMinShutterSpeed = (1/8000) -- (MinShutterSpeed is the *fastest* speed to use.)
 TotalityMaxShutterSpeed = 2.0 -- 1 sec (MaxShutterSpeed is the *slowest*, longest speed used.)
 TotalityExpStep = 1
@@ -219,15 +219,15 @@ TotalityExpStep = 1
 -- the moon, as much as possible.  Exposures here are kind of guesswork, and I have actually turned this
 -- off by default.
 --
-DoMaxExposures = 0		-- Number of (possibly bracketed) exposures to take at max-eclipse.
+DoMaxExposures = 1		-- Number of (possibly bracketed) exposures to take at max-eclipse.
 MaxOffset = (7/2) 		-- How long before max eclipse to start these exposures.  You'll have to test
 						-- or use math to determine this value.  (Value is in seconds.)
 NumMaxExposures = 1
 DoMaxBrackets = 1		-- Brackets?
 NumMaxBrackets = 1
 MaxBracketStep = 1
-MaxISO = 3200
-MaxShutterSpeed = 2.0
+MaxISO = 400
+MaxShutterSpeed = 3.0
 
 
 ---------------------------------------------------------------------------------------------------------
