@@ -76,7 +76,7 @@ c4 = {}
 --  The intent was that (for testing) you could set C1 to 00:00:30 or so, and the other contacts to
 --  similar offsets, and not worry about messing with the clock on the camera.  (This may not have
 --  been the best choice on my part!  :) )
-TestBeepNoShutter = 0 
+TestBeepNoShutter = 1 
 
 --
 -- Send log information (essentially everything shown on the screen) to a file (ECLIPSE.LOG) at the
@@ -90,7 +90,7 @@ LoggingFile = nil
 -- times are the same.  Make sure the times are correct for your location, and that your camera
 -- is accurately set to GPS time.
 --
-if ( TestBeepNoShutter == 1 )
+if ( TestBeepNoShutter == 0 )
 then
 	-- Esterbrook: 10:23:32 11:44:37 11:46:53 13:11:42
 	c1.hr = 09; c1.min = 06; c1.sec = 47;
@@ -100,9 +100,9 @@ then
 else
 	-- Testing:
 	c1.hr = 0; c1.min =  1; c1.sec = 00;
-	c2.hr = 0; c2.min =  4; c2.sec = 00;
-	c3.hr = 0; c3.min =  6; c3.sec = 20;
-	c4.hr = 0; c4.min =  9; c4.sec = 00;
+	c2.hr = 0; c2.min =  2; c2.sec = 00;
+	c3.hr = 0; c3.min =  4; c3.sec = 00;
+	c4.hr = 0; c4.min =  6; c4.sec = 00;
 end
 
 
@@ -499,7 +499,7 @@ function take_shot(iso, shutter_speed, dobkt, bktstep, bktcount)
 				
 		end
 	
-		if (TestBeepNoShutter == 0) 
+		if (TestBeepNoShutter == 0 or (true)) 
 		then
 		
 			camera.shoot(false)
@@ -537,7 +537,7 @@ function take_shot(iso, shutter_speed, dobkt, bktstep, bktcount)
 				
 			end
 			
-			if (TestBeepNoShutter == 0) then
+			if (TestBeepNoShutter == 0 or (true)) then
 		
 				camera.shoot(false)
 				task.yield(10) -- Give other stuff a chance to run
@@ -581,7 +581,7 @@ function take_burst (count, iso, speed)
 	log ("Burst! Time: %s  ISO: %s  shutter: %s  count: %d", 
 		pretty_time(get_cur_secs()), tostring(camera.iso.value), pretty_shutter(camera.shutter.value), count)
 	
-	if (TestBeepNoShutter == 0)
+	if (TestBeepNoShutter == 0 or (true))
 	then
 	
 		camera.burst(count)
