@@ -4,7 +4,7 @@
 
 -- Eclipse Magic
 --
--- Version 1.5.0
+-- Version 1.7.0
 --
 -- Copyright 2017 by Brian Greenberg, grnbrg@grnbrg.org.
 -- Distributed under the GNU General Public License.
@@ -33,6 +33,10 @@
 -- See http://xjubier.free.fr/en/site_pages/SolarEclipseExposure.html for suggestions for
 -- exposure values.
 --
+-- The previously released 1.5.0 version of this script can be found at:
+--
+--		http://www.grnbrg.org/eclipse_magic-1.5.0.lua
+--
 --
 -- If this script is useful, feel free to send a PayPal donation to Eclipse-Magic@grnbrg.org,
 -- or a Bitcoin donation to 1grnbrg3Ea4t6bxHvQKRvorbBeLNDXv2N.
@@ -41,6 +45,7 @@
 -- ***************************************************************************************************
 -- ***************************************************************************************************
 
+require ("logger")
 
 -- Variable definitons that have to go here.  Ignore them.
 c1 = {}
@@ -71,54 +76,43 @@ c4 = {}
 --  The intent was that (for testing) you could set C1 to 00:00:30 or so, and the other contacts to
 --  similar offsets, and not worry about messing with the clock on the camera.  (This may not have
 --  been the best choice on my part!  :) )
-TestBeepNoShutter = 0
+TestBeepNoShutter = 0 
 
+--
+-- Send log information (essentially everything shown on the screen) to a file (ECLIPSE.LOG) at the
+-- top directory of the camera card.  Useful for testing.
+--
+LogToFile = 1
+LoggingFile = nil
 
 --
 -- Set the 4 contact times here.  Time zone is irrelevant, as long as your camera and these
 -- times are the same.  Make sure the times are correct for your location, and that your camera
 -- is accurately set to GPS time.
 --
--- c1.hr = 9
--- c1.min = 6
--- c1.sec = 47
+if ( TestBeepNoShutter == 1 )
+then
+	-- Esterbrook: 10:23:32 11:44:37 11:46:53 13:11:42
+	c1.hr = 09; c1.min = 06; c1.sec = 47;
+	c2.hr = 10; c2.min = 19; c2.sec = 40;
+	c3.hr = 10; c3.min = 21; c3.sec = 43;
+	c4.hr = 11; c4.min = 41; c4.sec = 10;
+else
+	-- Testing:
+	c1.hr = 0; c1.min =  1; c1.sec = 00;
+	c2.hr = 0; c2.min =  4; c2.sec = 00;
+	c3.hr = 0; c3.min =  6; c3.sec = 20;
+	c4.hr = 0; c4.min =  9; c4.sec = 00;
+end
 
--- c2.hr = 10
--- c2.min = 19
--- c2.sec = 40
 
--- c3.hr = 10
--- c3.min = 21
--- c3.sec = 43
-
--- c4.hr = 11
--- c4.min = 41
--- c4.sec = 10
-
-c1.hr = 00
-c1.min = 55
-c1.sec = 00
-
-c2.hr = 1
-c2.min = 0
-c2.sec = 0
-
-c3.hr = 1
-c3.min = 2
-c3.sec = 0
-
-c4.hr = 1
-c4.min = 15
-c4.sec = 0
-
---
 -- Set an aperture value.  The script assumes that the aperture stays constant throughout the
 -- eclipe.  The camera will (try to) set this aperture (f-number) at the beginning of the script.
 -- Useful, as it is easy to forget this, if you are shooting with a regular camera lens.
 -- If the script and camera are being used with a fixed aperture lens (or telescope), then
 -- set the "SetAperture" to 0.
 SetAperture = 0
-Aperture = 5.0
+Aperture = 7.7
 
 --
 -- If you shoot with LiveView active, you will reduce the amount of mirror slap, giving
@@ -172,13 +166,33 @@ ShutterShockDelayMS = 300		-- Value is in milliseconds!
 -- Partial phase settings. 
 --
 PartialISO = 100
-PartialShutterSpeed = (1/800)
+PartialShutterSpeed = (1/8000)
 PartialMarginTime = 15			-- Number of seconds after C1 or C3 and before C2 or C4 to start exposures
 PartialExposureCount = 4		-- Number of partial phase exposures before and after totality
 PartialDoBkt = 1				-- Do you want to do exposure bracketing?  1 - yes, 0 - no
 PartialBktStep = 1				-- Number of f-stops in each step.  Can 0.333333, 1, 2, etc
 PartialBktCount = 1				-- How many brackets on each side of the neutral exposure?
 
+
+--
+-- Optionally enable high speed burst mode
+--
+-- As originally written, the script used the camera.burst() function, to take a burst of
+-- images as quickly as possible, as though the shutter button was held down.  This had two issues:
+-- The first being that the buffer in the camera fills after around 2-3 seconds when shooting
+-- RAW, and then slows drastically, and the second being that once called, the camera will take
+-- exposures until the requested number of images are captured, and if the buffer fills, this may
+-- take considerably longer than expected.
+--
+-- I have (by default) replaced this function with a burst function that tries to take a given number 
+-- of images over a set period of time, each with a single shutter release call.  This is much slower 
+-- (two or three frames per second, tops) but therefor fills the buffer more slowly, and allows the script
+-- to abort the burst (and take fewer than the requested number of images) if the capture runs past the 
+-- specified time limit.
+--
+-- If you prefer the old high speed burst call, set this variable to 1.
+--
+UseBurst = 0
 
 --
 -- Do a fast burst of exposures at C2 and C3, to try to get Baily's beads and chromosphere.
@@ -188,12 +202,33 @@ PartialBktCount = 1				-- How many brackets on each side of the neutral exposure
 -- the contact time.  Note that, between the setting of the camera clock and the jitter in this
 -- script, there will be some error in the timing.  +/- half a second or more is possible.
 --
-C23BurstCount = 20			-- Note that most Canon DSLRs can't take more than 13-14 RAW images
-							-- in a burst before the buffer is full, and they slow to ~1 image/second.
+C23BurstCount = 18			-- Note that most Canon DSLRs can't take more than 13-14 RAW images
+								-- in a burst before the buffer is full, and they slow to ~1 image/second.
 C2BurstStartOffset = 3
+C2BurstTime = 8
 C3BurstStartOffset = 2
+C3BurstTime = 8
 C23BurstISO = 100
 C23BurstShutterSpeed = (1/3200)
+
+
+--
+-- Do a fast burst of exposures before C2 and after C3, to try to get the diamond ring.
+--
+-- Be careful setting the RingStartOffset, Count and Time.  If the burst of images for the
+-- pre-C2 rings runs longer than expected, it can cause the pre-C2 Baily's Beads exposures to
+-- be skipped.
+--
+-- The post-C3 Rings exposures (if enabled) will run immediately after the post-C3 Baily's Beads
+-- exposures.
+--
+DoRing = 1		-- Are we going to try for a burst for the diamond ring?
+RingStartOffset = C2BurstStartOffset + 5  -- How long before C2/after C3 to start?  Be careful that
+												-- this does not interfere with the Baily's burst!
+RingBurstCount = 8  -- How many images?
+RingBurstTime = 4	-- If we're doing a manual burst, how long should it last?
+RingBurstISO = 100
+RingBurstShutterSpeed = 1/100
 
 
 --
@@ -207,8 +242,8 @@ C23BurstShutterSpeed = (1/3200)
 TotalityMinISO = 200 
 TotalityMaxISO = 200
 TotalityPrefISO = 200
-TotalityMinShutterSpeed = (1/8000) -- (MinShutterSpeed is the *fastest* speed to use.)
-TotalityMaxShutterSpeed = 2.0 -- 1 sec (MaxShutterSpeed is the *slowest*, longest speed used.)
+TotalityMinShutterSpeed = (1/4000) -- (MinShutterSpeed is the *fastest* speed to use.)
+TotalityMaxShutterSpeed = 1.0 -- 1 sec (MaxShutterSpeed is the *slowest*, longest speed used.)
 TotalityExpStep = 1
 
 --
@@ -227,8 +262,7 @@ DoMaxBrackets = 1		-- Brackets?
 NumMaxBrackets = 1
 MaxBracketStep = 1
 MaxISO = 400
-MaxShutterSpeed = 3.0
-
+MaxShutterSpeed = 2.0
 
 ---------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------
@@ -238,7 +272,6 @@ MaxShutterSpeed = 3.0
 ---------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------
 
-
 --
 -- Times are easiest to deal with in seconds.  This would be painful if they crossed over midnight,
 -- but late-night solar eclipses are rare.
@@ -247,13 +280,56 @@ c1_sec = c1.hr * 3600 + c1.min * 60 + c1.sec
 c2_sec = c2.hr * 3600 + c2.min * 60 + c2.sec 
 c3_sec = c3.hr * 3600 + c3.min * 60 + c3.sec 
 c4_sec = c4.hr * 3600 + c4.min * 60 + c4.sec 
-max_sec = c2_sec + ((c3_sec - c2_sec) / 2)
+max_sec = math.floor(c2_sec + ((c3_sec - c2_sec) / 2))
 
 MaxOffset = MaxOffset * DoMaxExposures -- This is ugly, and shouldn't be here.
 
 tick_offset = 0
 TestStartTime = 0
 
+
+--
+-- Log to stdout and optionally to a file
+--
+function log (s, ...)
+	local str = string.format (s, ...)
+	str = str .. "\n"
+	if (LogToFile == 0 or LoggingFile == nil)
+	then
+		io.write (str)
+	else
+		LoggingFile:write (str)
+	end
+	return
+end
+
+--
+-- Open log file
+--
+function log_start ()
+	if (LogToFile ~= 0)
+	then
+		local cur_time = dryos.date
+		-- Opening logger with long filename fails. Works with short name.
+		--local filename = string.format("eclipse_%04d%02d%02d_%02d%02d%02d.log", cur_time.year, cur_time.month, cur_time.day, cur_time.hour, cur_time.min, cur_time.sec)
+		local filename = string.format("eclipse.log")
+		print (string.format ("Open log file %s", filename))
+		LoggingFile = logger (filename)
+	else
+		print (string.format ("Logging not configured"))
+	end
+end
+
+--
+-- Close log file
+--
+function log_stop ()
+	if (LogToFile ~= 0)
+	then
+		print (string.format ("Close log file"))
+		LoggingFile:close ()
+	end
+end
 
 --
 -- Get the current time (in seconds) from the camera's clock.
@@ -299,6 +375,23 @@ end
 
 
 --
+-- Take a shutter speed expressed in (fractional) seconds and convert it to 1/x.
+--
+function pretty_shutter (shutter_speed)
+
+	local text_time = ""
+	if (shutter_speed >= 1.0)
+	then
+		text_time = tostring (shutter_speed)
+	else
+		text_time = string.format ("1/%s", tostring (1/shutter_speed))
+	end
+	return text_time
+
+end
+
+
+--
 -- Hurry up and wait for the next important time to arrive.
 --
 -- Leave the console displayed for 60 seconds at the start and end of 
@@ -313,7 +406,7 @@ function wait_until (done_waiting)
 	
 	console.show()
 	
-	print ("Waiting for", pretty_time(done_waiting), "in", string.gsub(string.format("%7d",(done_waiting - counter)), " ", ""), "seconds.")
+	log ("Waiting for %s in %d seconds.", pretty_time(done_waiting), done_waiting - counter)
 	
 	repeat
 
@@ -390,14 +483,14 @@ function take_shot(iso, shutter_speed, dobkt, bktstep, bktcount)
 
 		camera.shutter.value = shutter_speed
 	
-		print ("Click! Time:", pretty_time(get_cur_secs()), "ISO:", camera.iso.value, 
-				"shutter: 1/", 1/camera.shutter.value)
+		log ("Click! Time: %s  ISO: %s  shutter: %s", 
+			pretty_time(get_cur_secs()), tostring(camera.iso.value), pretty_shutter(camera.shutter.value))
 				
 		if (DoShutterShockDelay == 1)
 		then
 			
-			if ((shutter_speed > FastestDelayedShutter) and (shutter_speed 
-				< SlowestDelayedShutter))
+			if ((shutter_speed >= FastestDelayedShutter) and (shutter_speed 
+				<= SlowestDelayedShutter))
 			then
 				
 				task.yield(ShutterShockDelayMS)
@@ -428,14 +521,14 @@ function take_shot(iso, shutter_speed, dobkt, bktstep, bktcount)
 			
 			camera.shutter.value = bktspeed
 			
-			print ("Click! Time:", pretty_time(get_cur_secs()), "ISO:", camera.iso.value, 
-				"shutter: 1/", 1/camera.shutter.value)
+			log ("Click! Time: %s  ISO: %s  shutter: %s", 
+				pretty_time(get_cur_secs()), tostring(camera.iso.value), pretty_shutter(camera.shutter.value))
 				
 			if (DoShutterShockDelay == 1)
 			then
 			
-				if ((shutter_speed > FastestDelayedShutter) and (shutter_speed 
-					< SlowestDelayedShutter))
+				if ((shutter_speed >= FastestDelayedShutter) and (shutter_speed 
+					<= SlowestDelayedShutter))
 				then
 				
 					task.yield(ShutterShockDelayMS)
@@ -485,8 +578,8 @@ function take_burst (count, iso, speed)
 	end
 	
 	
-	print ("Burst! Time:", pretty_time(get_cur_secs()), "ISO:", camera.iso.value, 
-			"shutter: 1/", 1/camera.shutter.value)
+	log ("Burst! Time: %s  ISO: %s  shutter: %s  count: %d", 
+		pretty_time(get_cur_secs()), tostring(camera.iso.value), pretty_shutter(camera.shutter.value), count)
 	
 	if (TestBeepNoShutter == 0)
 	then
@@ -499,6 +592,65 @@ function take_burst (count, iso, speed)
 	
 		beep(3,50)
 		task.yield (4000 + (count * camera.shutter.ms))		
+		
+	end
+
+end
+
+
+--
+-- Take X pictures over Y seconds
+--
+-- The camera.burst() function is useful for taking exposures as fast as possible, but is
+-- limited by the camera's buffer space.  Depending on the body, burst mode will fill the buffer in 
+-- around 2 seconds.  Even the slower cameras will fill the buffer with RAW images in 3-4 seconds, 
+-- which is too fast to reliably capture Baily's Beads.  Switching to JPG would help, but must be 
+-- done manually.  Not a good option for several reasons.
+--
+-- This function implements a manually controlled burst mode, which stretches out the exposure speed.
+-- This spreads the time where the ~14 exposures that generally fit into the buffer out over a longer
+-- time, and also gives the camera time to write to the card.  Instead of 14 frames over 4 seconds,
+-- (~4fps) then slowing to maybe 4 frames every 3 seconds (1.5fps), we might be able to sustain 
+-- 2fps for 10 seconds.  Actual best framerate and duration will need testing for each camera and
+-- memory card.
+--
+-- Timing is more important than number of exposures, so this function will exit at the end of the
+-- specificed timespan, even if the required number of images have not been taken yet.
+function take_timed_burst(count, timespan, iso, speed)
+
+	local start_time = dryos.ms_clock -- Millisecond clock time that we're starting.
+	local end_time = (dryos.ms_clock + (timespan * 1000)) -- Clock time (in milliseconds) where that we're done.
+	local burst_interval = ((timespan * 1000) / count) -- Time between shutters, in milliseconds.
+	local time_now = start_time
+	local pause_time = 0
+	local exposure_num = 0
+	local last_time=0
+	
+	for exposure_num = 1, count, 1
+	do
+		
+		last_time=time_now
+		time_now = dryos.ms_clock
+						
+		take_shot (iso, speed, 0, 0, 0)
+				
+		if (time_now > end_time)
+		then
+			
+			return -- No time for another image.
+			
+		else
+					
+			pause_time = ((start_time + burst_interval * exposure_num) - (dryos.ms_clock + 75))
+			
+			if (pause_time > 0) -- Pause for the next interval to pass, if we're not running late.
+			then
+			
+				task.yield(pause_time)
+				
+			end
+			
+		end
 		
 	end
 
@@ -551,12 +703,15 @@ function do_partial (start_phase, stop_phase, which_partial)
 	if ( get_cur_secs() >= stop_phase ) -- Are we past this phase already?
 	then
 	
+		log ("Skip %s Partial. Finished %d seconds ago.", which_partial, (get_cur_secs() - stop_phase))
 		return
 		
 	end
 	
 	repeat
 	
+		log ("%s Partial: %d/%d  Interval: %d s  Remaining: %d",
+			which_partial, exposure_count, PartialExposureCount, image_interval, stop_phase - get_cur_secs())
 		if (get_cur_secs() <= image_time)
 		then
 		
@@ -577,7 +732,7 @@ end
 
 --
 -- Start the burst shot a little before C2, then start running through exposure settings, going from
--- short, fast exposures to slow, long exposures and thenback to short, until just before the midpoint
+-- short, fast exposures to slow, long exposures and then back to short, until just before the midpoint
 -- of the eclipse.  <strikethrough>Take two long exposures at that point, for good measure.</strikethrough>
 --
 function do_c2max()
@@ -588,30 +743,66 @@ function do_c2max()
 	if ( get_cur_secs() >= max_sec ) -- Are we past this phase already?
 	then
 	
+		log ("Skip C2->Max. Finished %d seconds ago.", (get_cur_secs() - max_sec))
 		return
 		
 	end
 	
-	if ( get_cur_secs() <= (c2_sec - C2BurstStartOffset) ) -- Have we past the burst for Baily's beads?
+	if (get_cur_secs() <= (c2_sec - (math.max(RingStartOffset, C2BurstStartOffset) + 30)))
 	then
-			
-		wait_until (c2_sec - (C2BurstStartOffset + 30))
+	
+		log ("Main C2->Max loop for %d seconds.", (c2_sec - (math.max(RingStartOffset, C2BurstStartOffset) + 30)))
+		
+		wait_until (c2_sec - (math.max(RingStartOffset, C2BurstStartOffset) + 30))
 		
 		print()
 		print("********************************************************")
-		print("30 seconds to C2!  Remove Filter!")
+		log  ("30 seconds to C2!  Remove Filter!")
 		print("********************************************************")
 		print()
 		
 		do_beep()
+		
+	end
+		
 	
+	if ((get_cur_secs() <= (c2_sec - RingStartOffset) ) and ( DoRing == 1)) -- Are we taking Diamond Ring shots?
+	then
+	
+		wait_until (c2_sec - RingStartOffset)
+		
+		if (UseBurst == 1)
+		then
+		
+			take_burst (RingBurstCount, RingBurstISO, RingBurstShutterSpeed)
+			
+		else
+		
+			take_timed_burst (RingBurstCount, RingBurstTime, RingBurstISO, RingBurstShutterSpeed)
+			
+		end
+		
+	end
+	
+	if ( get_cur_secs() < c2_sec ) -- Have we passed the burst for Baily's beads?
+	then
+			
 		wait_until (c2_sec - C2BurstStartOffset)
 		
-		take_burst (C23BurstCount, C23BurstISO, C23BurstShutterSpeed)
+		if (UseBurst == 1)
+		then
+		
+			take_burst (C23BurstCount, C23BurstISO, C23BurstShutterSpeed)
+			
+		else
+		
+			take_timed_burst (C23BurstCount, C2BurstTime, C23BurstISO, C23BurstShutterSpeed)
+			
+		end
 
 		print()
 		print("********************************************************")
-		print("Post C2 warning!")
+		log  ("Post C2 warning!")
 		print("********************************************************")
 		print()		
 		
@@ -664,13 +855,24 @@ function do_max()
 	if (DoMaxExposures == 0)  -- Are we doing this?
 	then
 	
+		log ("Skip Max Eclipse long exposures. Not configured.")
 		return 		-- Nope.
 	
 	end
 
+	if ( get_cur_secs() >= max_sec) -- Have we passed max already?
+	then
+	
+		log ("Skip Max. Finished %d seconds ago.", (get_cur_secs() - max_sec))
+		return
+		
+	end
 	for count_max_exp = NumMaxExposures , 1 , -1 do
 	
-		take_shot(MaxISO, MaxShutterSpeed, DoMaxBrackets, NumMaxBrackets, MaxBracketStep)
+		log ("do_max: MaxISO=%d, MaxShutterSpeed=%s, DoMaxBrackets=%d, NumMaxBrackets=%d, MaxBracketStep=%d",
+			MaxISO, tostring(MaxShutterSpeed), DoMaxBrackets, NumMaxBrackets, MaxBracketStep)
+			
+		take_shot(MaxISO, MaxShutterSpeed, DoMaxBrackets, MaxBracketStep, NumMaxBrackets)
 		
 	end
 	
@@ -686,9 +888,10 @@ function do_maxc3()
 	local cur_shutter_speed = 0
 	local CurISO = 0
 
-	if ( get_cur_secs() >= (c3_sec + C3BurstStartOffset) ) -- Are we past this phase already?
+	if ( get_cur_secs() >= (c3_sec + RingStartOffset) ) -- Are we past this phase already?
 	then
 	
+		log ("Skip Max->C3. Finished %d seconds ago.", (get_cur_secs() - (c3_sec + C3BurstStartOffset)))
 		return
 		
 	elseif ( get_cur_secs() < (c3_sec - C3BurstStartOffset) ) -- Do we have time for some totality exposures?
@@ -697,6 +900,7 @@ function do_maxc3()
 		cur_shutter_speed = TotalityMaxShutterSpeed
 		CurISO = TotalityMaxISO
 		
+		log ("Main Max->C3 loop for %d seconds.", (c3_sec - C3BurstStartOffset - get_cur_secs()))
 	
 		repeat
 	
@@ -729,7 +933,7 @@ function do_maxc3()
 
 		print()
 		print("********************************************************")
-		print("3 seconds to C3!  Filter warning!")
+		log  ("3 seconds to C3!  Filter warning!")
 		print("********************************************************")
 		print()
 		
@@ -739,11 +943,36 @@ function do_maxc3()
 	
 	wait_until (c3_sec - C3BurstStartOffset)
 	
-	take_burst (C23BurstCount, C23BurstISO, C23BurstShutterSpeed)
+	if (UseBurst == 1)
+	then
+	
+		take_burst (C23BurstCount, C23BurstISO, C23BurstShutterSpeed)
+		
+	else
+	
+		take_timed_burst(C23BurstCount, C3BurstTime, C23BurstISO, C23BurstShutterSpeed)
+		
+	end
+	
+	if (DoRing == 1)
+	then
+	
+		if (UseBurst == 1)
+		then
+	
+			take_burst (RingBurstCount, RingBurstISO, RingBurstShutterSpeed)
+		
+		else
+	
+			take_timed_burst(RingBurstCount, RingBurstTime, RingBurstISO, RingBurstShutterSpeed)
+		
+		end
+		
+	end
 
 	print()
 	print("********************************************************")
-	print("End of totality! Replace filter!")
+	log  ("End of totality! Replace filter!")
 	print("********************************************************")
 	print()
 		
@@ -767,6 +996,7 @@ function main()
 	
     menu.close()
     console.show()
+	log_start ()
 
 	--
 	-- The camera maintains a millisecond timer since power-on.  We can use this to
@@ -803,6 +1033,11 @@ end
 	
 	print ("Done!")
 	print ()
+	log ("TestBeepNoShutter: %d", TestBeepNoShutter)
+	log ("C1: %s", pretty_time(c1_sec))
+	log ("C2: %s", pretty_time(c2_sec))
+	log ("C3: %s", pretty_time(c3_sec))
+	log ("C4: %s", pretty_time(c4_sec))
 
 	-- If the camera is not in manual mode, trying to set the shutter speed throws errors.
 	-- Check to make sure we are in manual mode, and refuse to run if we're not.
@@ -830,7 +1065,7 @@ end
 		
 		beep (5, 100)
 		
-		print("Camera must be in manual (M) mode!!")
+		log  ("Camera must be in manual (M) mode!!")
 		print()
 		print("Press any button to exit the script.  Change the mode and re-run.")
 		
@@ -838,6 +1073,10 @@ end
 		
 	end
 		
+	log ("All done. Normal exit.")
+	log_stop ()
+	print("Press any button to exit the script.")
+	key.wait()
     console.hide()
 	
 end -- Done.  Hope there were no clouds.
@@ -890,7 +1129,7 @@ main() -- Run the program.
 	    -- clear as I thought.
 		
 -- 1.4.0  (Not released)
-		-- Attempt to implment the changing of the file prefix for the saved images.  It didn'take
+		-- Attempt to implment the changing of the file prefix for the saved images.  It didn't
 			-- work well, and I scrapped it.
 		
 -- 1.5.0
@@ -901,3 +1140,19 @@ main() -- Run the program.
 	-- Add a mid-eclipse section.  This is a short section around the max eclipse point to optionally
 		-- try for some earthshine exposures.
 	-- Set the aperture on program start.
+	
+-- 1.6.0 -- Contributions from Eric Krohn, <krohn@ekrohn.com> (Many thanks!)
+	-- Added logging to permanent file, "ECLIPSE.LOG" at top level of the memory card
+	-- More extensive logging added throughout the script
+	-- Bugfix:  In do_max() the last two arguments to take_shot() were reversed. 
+	-- Bugfix:  do_max() is unguarded as far as current time
+	-- Added pretty_shutter() to make the shutter speed numbers more sensible
+
+-- 1.7.0
+	-- Added optional function to take some diamond ring images before and after the Baily's Beads
+		-- exposures.  Be careful not to overlap the Ring and Beads exposures before C2!
+	-- Added a new burst function that takes a burst of images, one at a time, rather than using the
+		-- camera's burst function.  Slower, but slower is better for the buffer, and gives us the
+		-- opportunity to stop shooting at a specific time, where a burst will run until the requested
+		-- number of images have been captured.
+
